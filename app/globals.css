@@ -60,3 +60,6 @@
 .ledger-surface [data-slot=dialog-header]{padding-right:44px!important}
 .ledger-surface [data-slot=alert-dialog-title]{padding:0!important}
 }
+
+/* Select menus are portaled outside the dialog and must stay above its backdrop. */
+div:has(> .ledger-select){z-index:120!important}
