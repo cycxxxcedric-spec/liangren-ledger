@@ -65,3 +65,14 @@
 div:has(> .ledger-select){z-index:120!important}
 .cloud-strip{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px;background:#eef4ff;border-radius:18px;margin:20px 0}.cloud-strip p,.cloud-status{overflow-wrap:anywhere;font-size:14px}.cloud-form{display:flex;flex-direction:column;gap:16px}.cloud-form label{display:flex;flex-direction:column;gap:8px}.cloud-form input{width:100%;min-width:0;font-size:16px;padding:12px;border:1px solid #cdd8ec;border-radius:10px}.cloud-form p{overflow-wrap:anywhere}.cloud-form button{white-space:normal;height:auto;min-height:44px}
 
+/* Clear roles: cash, category allowances, entries, and annual savings. */
+.money-input{font-variant-numeric:tabular-nums;letter-spacing:.035em;font-size:18px!important}
+.budget-layout,.overview{grid-template-columns:minmax(0,1fr)!important}
+.category-math{font-variant-numeric:tabular-nums}
+.cloud-strip{padding:10px 16px;margin:0 0 18px;align-items:center}.cloud-strip p{margin:3px 0 0}.cloud-strip b{font-size:14px}
+.goal-reminder{display:grid;grid-template-columns:1.2fr 1fr;gap:24px;background:#eff5ff;border:1px solid #cbdcf8;border-radius:22px;padding:24px;margin-bottom:20px;color:#173b75}
+.goal-reminder strong{display:block;font-size:clamp(34px,6vw,52px);line-height:1.2;font-variant-numeric:tabular-nums;margin:8px 0}.goal-reminder p{font-size:14px;line-height:1.6;margin:0;max-width:480px}
+.goal-reminder-progress{display:flex;flex-direction:column;justify-content:center;gap:12px}.goal-reminder-progress>span{display:flex;justify-content:space-between;gap:12px}.goal-reminder-progress b{font-variant-numeric:tabular-nums}
+.monthly-disclosure{margin:20px 0}.goal-presets{padding:16px;background:#eff5ff;border-radius:12px}.saving-tile{margin-bottom:20px}.budget-guide{margin:0 0 18px}
+@media(max-width:760px){.goal-reminder{grid-template-columns:minmax(0,1fr);gap:18px;padding:20px}.cloud-strip{gap:8px}.cloud-strip .button{flex-shrink:0;padding:8px 10px;font-size:13px}.goal-reminder-progress>span{font-size:14px}.category-math{gap:6px}.money-input{max-width:100%;min-width:0}.goal-reminder strong{overflow-wrap:anywhere}}
+.goal-reminder .text-button{font-size:14px!important;justify-content:flex-start;gap:8px}.goal-reminder .text-button svg{flex-shrink:0}
