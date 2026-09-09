@@ -2,8 +2,8 @@
 import {useEffect,useRef,useState} from 'react';
 import {ArrowUpRight,ArrowRight,Plus,ChevronLeft,ChevronRight,Wallet,Plane,Utensils,ShoppingBag,Car,Heart,House,Coins,TrendingUp,Download,Upload,Settings,Check,RotateCcw,Pencil,Trash2,SlidersHorizontal,CalendarDays,ShieldCheck,BookOpen} from 'lucide-react';
 import {Tabs,TabsList,TabsTrigger,TabsContent} from '@/components/ui/tabs';
-import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from '@/components/ui/dialog';
-import {AlertDialog,AlertDialogContent,AlertDialogTitle,AlertDialogDescription} from '@/components/ui/alert-dialog';
+import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from './ledger-dialog';
+import {AlertDialog,AlertDialogContent,AlertDialogTitle,AlertDialogDescription} from './ledger-dialog';
 import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from '@/components/ui/select';
 import {Collapsible,CollapsibleTrigger,CollapsibleContent} from '@/components/ui/collapsible';
 import {Progress} from '@/components/ui/progress';
@@ -89,6 +89,7 @@ export default function Ledger(){
  <AlertDialog open={pendingImport!==null} onOpenChange={o=>!o&&setPendingImport(null)}><AlertDialogContent className="ledger-dialog"><AlertDialogTitle>用这份备份恢复账本？</AlertDialogTitle><AlertDialogDescription>备份开始于 {pendingImport?.start}，包含 {pendingImport?.entries.length} 笔流水。恢复会替换当前浏览器的全部账本，不会与现有记录合并。建议先导出当前备份。</AlertDialogDescription><div className="dialog-actions"><button className="button outline" onClick={()=>setPendingImport(null)}>取消</button><button className="button primary" onClick={()=>{if(pendingImport&&commit(pendingImport,true)){setMonth(pendingImport.start);setPendingImport(null);setNotice('备份已恢复。');}}}>恢复并替换</button></div></AlertDialogContent></AlertDialog>
  </div>
 }
+
 
 
 
