@@ -1,7 +1,7 @@
 export type Kind = 'expense' | 'refund' | 'income' | 'saving' | 'withdrawal';
 export type Entry = { id: string; date: string; kind: Kind; amount: number; category: string; note: string; who: string; time?: string };
 export type Plan = { effective: string; annual: number[]; income: number; profile: string };
-export type Data = { schema: 1; start: string; openingSavings: number | null; openingTreasury?: number | null; plans: Plan[]; goals: Record<string,number>; entries: Entry[]; savedAt: string };
+export type Data = { schema: 1; start: string; startDate?: string; openingSavings: number | null; openingTreasury?: number | null; plans: Plan[]; goals: Record<string,number>; entries: Entry[]; savedAt: string };
 export const categories = [
   {id:'food',name:'日常外食',hint:'非旅行时的正餐、外卖',group:'日常'},
   {id:'home',name:'家庭补给',hint:'水果、临时买菜等；日常伙食父母支持',group:'日常'},
@@ -38,16 +38,19 @@ export const validMonth = (m:unknown):m is string => typeof m==='string' && /^(2
 export function planAt(d:Data, month:string):Plan {
   return d.plans.filter(p=>p.effective<=month).sort((a,b)=>b.effective.localeCompare(a.effective))[0] ?? d.plans[0];
 }
+export const budgetStartDate=(d:Data)=>d.startDate??`${d.start}-01`;
 export function quotaAt(d:Data, month:string, i:number):number {
   if(month<d.start) return 0;
   const annual=planAt(d,month).annual[i];
-  return month.endsWith('-12') ? annual-Math.floor(annual/12)*11 : Math.floor(annual/12);
+  const full=month.endsWith('-12') ? annual-Math.floor(annual/12)*11 : Math.floor(annual/12);
+  if(month===d.start&&d.startDate){const days=new Date(Number(month.slice(0,4)),Number(month.slice(5)),0).getDate();return Math.floor(full*(days-Number(d.startDate.slice(8))+1)/days);}
+  return full;
 }
 export function envelopes(d:Data, month:string) {
   return categories.map((c,i)=>{
     let allocated=0;
     for(let n=monthIndex(d.start);n<=monthIndex(month);n++) allocated+=quotaAt(d,monthName(n),i);
-    const entries=d.entries.filter(t=>t.category===c.id && t.date.slice(0,7)>=d.start && t.date.slice(0,7)<=month);
+    const entries=d.entries.filter(t=>t.category===c.id && t.date>=budgetStartDate(d) && t.date.slice(0,7)<=month);
     const net=(ts:Entry[])=>ts.reduce((s,t)=>s+(t.kind==='expense'?t.amount:t.kind==='refund'?-t.amount:0),0);
     const spent=net(entries.filter(t=>t.date.startsWith(month)));
     const quota=quotaAt(d,month,i);
@@ -61,19 +64,21 @@ export function goalAt(d:Data,year:number):number {
   // Unconfigured years use the household's 140k recommendation. Each explicit
   // year's goal is independent of budget edits in any other year.
   const full=14000000;
-  const count=year===Number(d.start.slice(0,4))?13-Number(d.start.slice(5)):12;
+  const days=new Date(Number(d.start.slice(0,4)),Number(d.start.slice(5)),0).getDate();
+  const count=year===Number(d.start.slice(0,4))?13-Number(d.start.slice(5))-(d.startDate?(Number(d.startDate.slice(8))-1)/days:0):12;
   return Math.round(full*count/12);
 }
 export function yearTotals(d:Data,year:number,through=`${year}-12`) {
   const rows=d.entries.filter(t=>t.date.startsWith(`${year}-`)&&t.date.slice(0,7)<=through);
-  const sum=(kind:Kind)=>rows.filter(t=>t.kind===kind&&(!['saving','withdrawal'].includes(kind)||t.date.slice(0,7)>=d.start)).reduce((a,t)=>a+t.amount,0);
+  const sum=(kind:Kind)=>rows.filter(t=>t.kind===kind&&(!['saving','withdrawal'].includes(kind)||t.date>=budgetStartDate(d))).reduce((a,t)=>a+t.amount,0);
   return {income:sum('income'),expense:sum('expense')-sum('refund'),saved:sum('saving')-sum('withdrawal'),count:rows.length};
 }
-export const sumSavings=(d:Data,through:string)=>d.entries.filter(t=>t.date.slice(0,7)>=d.start&&t.date.slice(0,7)<=through).reduce((s,t)=>s+(t.kind==='saving'?t.amount:t.kind==='withdrawal'?-t.amount:0),0);
+export const sumSavings=(d:Data,through:string)=>d.entries.filter(t=>t.date>=budgetStartDate(d)&&t.date.slice(0,7)<=through).reduce((s,t)=>s+(t.kind==='saving'?t.amount:t.kind==='withdrawal'?-t.amount:0),0);
 export function validateData(value:unknown):Data {
   const d=value as Data;
   const money=(n:unknown)=>typeof n==='number'&&Number.isSafeInteger(n)&&n>=0&&n<=1e12;
   if(!d || d.schema!==1 || !validMonth(d.start) || !(d.openingSavings===null||money(d.openingSavings)) || !Array.isArray(d.plans) || !d.plans.length || d.plans.length>2000 || !Array.isArray(d.entries) || d.entries.length>100000 || !d.goals || typeof d.goals!=='object') throw Error('不是有效的两人小账备份。');
+  if(d.startDate!==undefined&&(typeof d.startDate!=='string'||!/^20\d\d-\d\d-\d\d$/.test(d.startDate)||d.startDate.slice(0,7)!==d.start||isNaN(Date.parse(d.startDate))||new Date(d.startDate+'T12:00:00Z').toISOString().slice(0,10)!==d.startDate))throw Error('开始日期无效。');
   if(d.openingTreasury!==undefined&&d.openingTreasury!==null&&!money(d.openingTreasury)) throw Error('期初金库金额有误。');
   if(d.openingTreasury!=null&&d.openingSavings!=null&&d.openingSavings>d.openingTreasury) throw Error('期初目标存款属于总金库，不能超过期初金库总额。');
   if(!d.plans.some(p=>p.effective===d.start)) throw Error('缺少开始月份的预算。');
@@ -99,7 +104,7 @@ export function entriesCsv(entries:Entry[]):string{
 
 export function treasury(d:Data,through:string){
  const active=through>=d.start;
- const rows=d.entries.filter(t=>t.date.slice(0,7)>=d.start&&t.date.slice(0,7)<=through);
+ const rows=d.entries.filter(t=>t.date>=budgetStartDate(d)&&t.date.slice(0,7)<=through);
  const sum=(kind:Kind,month?:string)=>rows.filter(t=>t.kind===kind&&(!month||t.date.startsWith(month))).reduce((s,t)=>s+t.amount,0);
  const income=sum('income'), expense=sum('expense')-sum('refund'), netReserved=sum('saving')-sum('withdrawal');
  const total=active&&d.openingTreasury!=null?d.openingTreasury+income-expense:null;
