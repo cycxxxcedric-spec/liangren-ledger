@@ -63,3 +63,5 @@
 
 /* Select menus are portaled outside the dialog and must stay above its backdrop. */
 div:has(> .ledger-select){z-index:120!important}
+.cloud-strip{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px;background:#eef4ff;border-radius:18px;margin:20px 0}.cloud-strip p,.cloud-status{overflow-wrap:anywhere;font-size:14px}.cloud-form{display:flex;flex-direction:column;gap:16px}.cloud-form label{display:flex;flex-direction:column;gap:8px}.cloud-form input{width:100%;min-width:0;font-size:16px;padding:12px;border:1px solid #cdd8ec;border-radius:10px}.cloud-form p{overflow-wrap:anywhere}.cloud-form button{white-space:normal;height:auto;min-height:44px}
+
