@@ -31,3 +31,14 @@ export function mergeLedger(base:Data, local:Data, remote:Data,choices:Record<st
   if(conflicts.length) return {ok:false,conflicts};
   return {ok:true,data:{...config,entries,savedAt:remote.savedAt}};
 }
+
+/** Compare content, not object key ordering or the order in which phones added rows. */
+export function sameLedger(a:Data,b:Data):boolean {
+ const ordered=(d:Data)=>({...d,savedAt:'',entries:[...d.entries].sort((x,y)=>x.id.localeCompare(y.id)),plans:[...d.plans].sort((x,y)=>x.effective.localeCompare(y.effective))});
+ return canonical(ordered(a))===canonical(ordered(b));
+}
+export function entryUnchanged(original:Entry,current:Entry|undefined):boolean{return canonical(original)===canonical(current);}
+
+export function settingsUnchanged(a:Data,b:Data):boolean{
+ const settings=(d:Data)=>{const {entries:_,savedAt:__,...rest}=d;return rest;};return canonical(settings(a))===canonical(settings(b));
+}

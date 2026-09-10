@@ -1,0 +1,13 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile,access} from 'node:fs/promises';
+import vm from 'node:vm';
+const source=await readFile('out/sw.js','utf8');
+const base=JSON.parse(source.match(/const BASE=(.*?);/)[1]);const prefix=JSON.parse(source.match(/const PREFIX=(.*?);/)[1]);
+const handlers={};let cached=new Response('<html>offline ledger</html>');let stored=0;let skipped=0;const removed=[];let precache=[];
+const context={self:{addEventListener:(name,fn)=>handlers[name]=fn,location:{origin:'https://example.test'},skipWaiting:()=>{skipped++;},clients:{claim:()=>Promise.resolve()}},caches:{open:async()=>({addAll:async urls=>{precache=urls;},put:async()=>{stored++;}}),keys:async()=>[prefix+'old','other-app-cache'],delete:async key=>{removed.push(key);},match:async()=>cached},URL,Request:class{constructor(url){this.url=url;}},Response,fetch:async()=>new Response('network')};
+vm.runInNewContext(source,context);
+void test('离线缓存列出的资源都实际存在，包括图标与主页',async()=>{let work;handlers.install({waitUntil:p=>work=p});await work;assert.ok(precache.some(r=>r.url===base+'index.html'));assert.ok(precache.some(r=>r.url===base+'icon-192.png'));for(const r of precache)await access('out/'+r.url.slice(base.length));assert.equal(skipped,1);});
+void test('更新只清理本应用旧缓存，不影响其他数据',async()=>{let work;handlers.activate({waitUntil:p=>work=p});await work;assert.deepEqual(removed,[prefix+'old']);});
+void test('断网打开页面回退到缓存，联网时取新页面',async()=>{let response;context.fetch=async()=>{throw Error('offline');};handlers.fetch({request:{url:'https://example.test'+base,method:'GET',mode:'navigate'},respondWith:p=>response=p,waitUntil:()=>{}});assert.match(await(await response).text(),/offline ledger/);context.fetch=async()=>new Response('fresh');handlers.fetch({request:{url:'https://example.test'+base,method:'GET',mode:'navigate'},respondWith:p=>response=p,waitUntil:()=>{}});assert.equal(await(await response).text(),'fresh');assert.equal(stored,1);});
+void test('不拦截跨域请求和写入请求',()=>{let intercepted=0;for(const request of [{url:'https://other.test/',method:'GET',mode:'navigate'},{url:'https://example.test'+base,method:'POST',mode:'cors'}])handlers.fetch({request,respondWith:()=>intercepted++});assert.equal(intercepted,0);});

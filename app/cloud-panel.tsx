@@ -3,7 +3,7 @@ import {createClient, type Session} from '@supabase/supabase-js';
 import {cloudUrl,cloudPublishableKey} from '../lib/cloud-config';
 import {validateData,initialData,categories,type Data} from '../lib/budget';
 import {saveRecovery} from '../lib/recovery';
-import {mergeLedger} from '../lib/sync-merge';
+import {mergeLedger,sameLedger} from '../lib/sync-merge';
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from './ledger-dialog';
 
 const client=createClient(cloudUrl,cloudPublishableKey);
@@ -12,7 +12,7 @@ type Snapshot={id:string;data:Data;revision:number;invite:string|null};
 type Link={user:string;snapshot:Snapshot};
 const local=()=>{const raw=localStorage.getItem(KEY);return raw?validateData(JSON.parse(raw)):initialData();};
 function publish(d:Data){const next=validateData({...d,savedAt:new Date().toISOString()});localStorage.setItem(KEY,JSON.stringify(next));window.dispatchEvent(new Event('ledger-cloud-update'));}
-async function rpc(name:string,args?:Record<string,unknown>){const {data,error}=await client.rpc(name,args);if(error)throw Error(error.message);return data;}
+async function rpc(name:string,args?:Record<string,unknown>){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),20000);try{const {data,error}=await client.rpc(name,args).abortSignal(controller.signal);if(error)throw Error(controller.signal.aborted?'连接超时，本机记录保留；联网后自动重试':error.message);return data;}finally{clearTimeout(timer);}}
 function snapshot(raw:Snapshot):Snapshot{return {...raw,data:validateData(raw.data)};}
 export default function CloudPanel({data:ledger}: {data:Data}){
  const [cloudInfo,setCloudInfo]=useState<Snapshot|null>(null);
@@ -33,11 +33,12 @@ export default function CloudPanel({data:ledger}: {data:Data}){
    setStatus('正在同步…');
    const remoteRaw=await rpc('lr_read');if(!remoteRaw)throw Error('云端账本不存在，请重新连接');
    const remote=snapshot(remoteRaw);if(remote.id!==link.snapshot.id)throw Error('账本身份不匹配，已停止同步');
+   if(active.current?.user.id!==link.user)return;
    const captured=local(),m=mergeLedger(link.snapshot.data,captured,remote.data);
    if(!m.ok){showConflict({base:link.snapshot.data,local:captured,remote,keys:m.conflicts,user:link.user});return;}
    let next=remote;
-   const same=(d:Data)=>JSON.stringify({...d,savedAt:''});
-   if(same(m.data)!==same(remote.data)){
+   
+   if(!sameLedger(m.data,remote.data)){
     const result=await rpc('lr_save',{expected_revision:remote.revision,payload:m.data});
     if(result.conflict){setStatus('另一台手机刚保存，稍后自动重试');return;}
     next=snapshot(result.snapshot);
@@ -46,9 +47,9 @@ export default function CloudPanel({data:ledger}: {data:Data}){
    // A record may have been entered while the request was in flight.
    const latest=local(),merged=mergeLedger(captured,latest,next.data);
    if(!merged.ok){showConflict({base:captured,local:latest,remote:next,keys:merged.conflicts,user:link.user});return;}
-   if(same(latest)!==same(merged.data))publish(merged.data);
+   if(!sameLedger(latest,merged.data))publish(merged.data);
    localStorage.setItem(LINK,JSON.stringify({user:link.user,snapshot:next}));
-   setCloudInfo(next);setInvite(next.invite);setLinked(true);setStatus(same(merged.data)===same(next.data)?'已同步 · '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):'本机有新记录 · 等待同步');
+   setCloudInfo(next);setInvite(next.invite);setLinked(true);setStatus(sameLedger(merged.data,next.data)?'已同步 · '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):'本机有新记录 · 等待同步');
   }catch(e){setStatus(e instanceof Error?e.message:'同步失败，记录仍保存在本机');}
   finally{running.current=false;}
  }
@@ -64,13 +65,13 @@ export default function CloudPanel({data:ledger}: {data:Data}){
  async function auth(signup:boolean){await action(async()=>{const credentials={email:email.trim(),password};const {data,error}=signup?await client.auth.signUp({...credentials,options:{emailRedirectTo:location.origin+import.meta.env.BASE_URL}}):await client.auth.signInWithPassword(credentials);if(error)throw Error(error.message);setPassword('');setStatus(data.session?'登录成功，请连接账本':'请查收验证邮件，验证邮箱后回来登录');});}
  async function attach(mode:'create'|'read'|'join'){
   await action(async()=>{
-   if(!session)throw Error('请先登录');
+   if(!session)throw Error('请先登录');const user=session.user.id;
    const previous=localStorage.getItem(KEY);
    // Retain a local recovery copy before any attachment or replacement.
    if(previous)localStorage.setItem('liangren-before-cloud-'+Date.now(),previous);
    const raw=await rpc(mode==='create'?'lr_create':mode==='join'?'lr_join':'lr_read',mode==='create'?{payload:local()}:mode==='join'?{code:code.trim()}:undefined);
    if(!raw)throw Error('这个账号还没有云端账本，请创建或输入伴侣的邀请码');
-   const next=snapshot(raw);if(localStorage.getItem(KEY)!==previous)throw Error('连接期间本机记录有更新，已保留本机内容。请再次连接前核对备份。');publish(next.data);localStorage.setItem(LINK,JSON.stringify({user:session.user.id,snapshot:next}));setCloudInfo(next);setLinked(true);setInvite(next.invite);setStatus('已连接 · 云端保存成功');
+   if(active.current?.user.id!==user)throw Error('账号已变化，请重新连接；本机记录未替换');const next=snapshot(raw);if(localStorage.getItem(KEY)!==previous)throw Error('连接期间本机记录有更新，已保留本机内容。请再次连接前核对备份。');publish(next.data);localStorage.setItem(LINK,JSON.stringify({user:session.user.id,snapshot:next}));setCloudInfo(next);setLinked(true);setInvite(next.invite);setStatus('已连接 · 云端保存成功');
   });
  }
  async function resolveConflict(){
@@ -88,7 +89,7 @@ export default function CloudPanel({data:ledger}: {data:Data}){
    if(active.current?.user.id!==c.user)return;
    const latest=local(),combined=mergeLedger(current,latest,next.data);
    if(!combined.ok){showConflict({base:current,local:latest,remote:next,keys:combined.conflicts,user:c.user});return;}
-   publish(validateData(combined.data));localStorage.setItem(LINK,JSON.stringify({user:c.user,snapshot:next}));setCloudInfo(next);conflictRef.current=null;setConflict(null);setStatus(JSON.stringify({...combined.data,savedAt:''})===JSON.stringify({...next.data,savedAt:''})?'冲突已处理，选择已保存到云端':'冲突已处理，本机有新修改等待同步');
+   publish(validateData(combined.data));localStorage.setItem(LINK,JSON.stringify({user:c.user,snapshot:next}));setCloudInfo(next);conflictRef.current=null;setConflict(null);setStatus(sameLedger(combined.data,next.data)?'冲突已处理，选择已保存到云端':'冲突已处理，本机有新修改等待同步');
   }finally{running.current=false;}});
  }
  function describe(d:Data,key:string){
