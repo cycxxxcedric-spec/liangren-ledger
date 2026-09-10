@@ -105,10 +105,11 @@ export function entriesCsv(entries:Entry[]):string{
 export function treasury(d:Data,through:string){
  const active=through>=d.start;
  const rows=d.entries.filter(t=>t.date>=budgetStartDate(d)&&t.date.slice(0,7)<=through);
- const sum=(kind:Kind,month?:string)=>rows.filter(t=>t.kind===kind&&(!month||t.date.startsWith(month))).reduce((s,t)=>s+t.amount,0);
+ const sum=(kind:Kind)=>rows.filter(t=>t.kind===kind).reduce((s,t)=>s+t.amount,0);
+ const monthSum=(kind:Kind)=>d.entries.filter(t=>t.kind===kind&&t.date.slice(0,7)===through).reduce((s,t)=>s+t.amount,0);
  const income=sum('income'), expense=sum('expense')-sum('refund'), netReserved=sum('saving')-sum('withdrawal');
  const total=active&&d.openingTreasury!=null?d.openingTreasury+income-expense:null;
  const reserved=active&&d.openingSavings!==null?d.openingSavings+netReserved:null;
  const available=total!==null&&reserved!==null?total-reserved:null;
- return {total,reserved,available,income,expense,netReserved,change:income-expense,monthIncome:sum('income',through),monthExpense:sum('expense',through)-sum('refund',through),monthReserved:sum('saving',through)-sum('withdrawal',through)};
+ return {total,reserved,available,income,expense,netReserved,change:income-expense,monthIncome:monthSum('income'),monthExpense:monthSum('expense')-monthSum('refund'),monthReserved:monthSum('saving')-monthSum('withdrawal')};
 }

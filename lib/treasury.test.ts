@@ -10,3 +10,11 @@ void test('修改及删除收入消费记录，后续金库和分类一起重算
 void test('旧备份缺少总金库期初时不虚构余额；填写0有意义',()=>{const d=initialData();d.entries=[t('1','income',2000000)];assert.doesNotThrow(()=>validateData(d));assert.equal(treasury(d,'2026-10').total,null);assert.equal(treasury(d,'2026-10').available,null);d.openingTreasury=0;d.openingSavings=0;assert.equal(treasury(d,'2026-10').total,2000000);});
 void test('期初包含旧流水，不重复计入；预算前存款不充当新增目标',()=>{const d=initialData();d.openingTreasury=1000000;d.openingSavings=300000;d.entries=[t('1','income',2000000,'2026-09-01'),t('2','saving',200000,'2026-09-02')];assert.equal(treasury(d,'2026-10').total,1000000);assert.equal(treasury(d,'2026-10').reserved,300000);assert.equal(yearTotals(d,2026).saved,0);});
 void test('不掩盖资金透支，期初目标不能大于期初总额',()=>{const d=initialData();d.openingTreasury=100;d.openingSavings=200;assert.throws(()=>validateData(d));d.openingSavings=0;d.entries=[t('1','saving',200)];assert.equal(treasury(d,'2026-10').available,-100);});
+
+void test('本月汇总包含起算前工资消费，金库只增加起算后金额且不依赖期初填写',()=>{
+ const d=initialData();d.start='2026-09';d.startDate='2026-09-10';
+ d.entries=[t('before','income',1350000,'2026-09-09'),t('after','income',700000,'2026-09-10'),t('expense','expense',10000,'2026-09-09'),t('refund','refund',1000,'2026-09-10'),t('other','income',999,'2026-08-31')];
+ let v=treasury(d,'2026-09');assert.equal(v.monthIncome,2050000);assert.equal(v.monthExpense,9000);assert.equal(v.total,null);
+ d.openingTreasury=2000000;d.openingSavings=0;v=treasury(d,'2026-09');assert.equal(v.total,2701000);assert.equal(v.monthIncome,2050000);
+ assert.equal(treasury(d,'2026-10').monthIncome,0);
+});
