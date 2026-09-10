@@ -9,12 +9,13 @@ const canonical = (value: unknown): string => {
   return JSON.stringify(value);
 };
 export type MergeResult = {ok:true; data:Data} | {ok:false; conflicts:string[]};
-export function mergeLedger(base:Data, local:Data, remote:Data):MergeResult {
+export function mergeLedger(base:Data, local:Data, remote:Data,choices:Record<string,'local'|'remote'>={}):MergeResult {
   const conflicts:string[]=[];
   function choose<T>(key:string,b:T,l:T,r:T):T {
     if(canonical(l)===canonical(r)) return l;
     if(canonical(l)===canonical(b)) return r;
     if(canonical(r)===canonical(b)) return l;
+    if(choices[key])return choices[key]==='local'?l:r;
     conflicts.push(key); return l;
   }
   const maps=[base,local,remote].map(d=>new Map(d.entries.map(e=>[e.id,e])));
